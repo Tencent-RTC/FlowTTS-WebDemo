@@ -4,10 +4,12 @@ const { createClient } = require('@supabase/supabase-js');
 const logger = require('./logger');
 
 const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
+const supabaseKey = process.env.SUPABASE_SECRET_KEY;
 const supabaseDb = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 
 const CLONED_CACHE_TTL = 5 * 60 * 1000;
+const TURBO_MODEL = 'flow_02_turbo';
+const EX_MODEL = 'flow_01_ex';
 
 const FALLBACK_VOICES = [
     { id: 'v-female-R2s4N9qJ', name: '温柔姐姐', language: 'zh', description: '优质女声' },
@@ -17,8 +19,12 @@ const FALLBACK_VOICES = [
 
 class VoiceLibraryManager {
     constructor() {
-        this.voices = [];
-        this.voiceIds = new Set();
+        this.standardVoices = [];
+        this.extendedVoices = [];
+        this.standardVoiceIds = new Set();
+        this.extendedVoiceIds = new Set();
+        this.standardLanguageMap = {};
+        this.extendedLanguageMap = {};
         this.clonedVoicesCache = new Map();
         this.initialized = false;
     }
@@ -26,34 +32,87 @@ class VoiceLibraryManager {
     init() {
         if (this.initialized) return;
         try {
-            const filePath = path.join(__dirname, '../data/voices.json');
-            const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-            this.voices = data.voices || [];
-            this.voiceIds = new Set(this.voices.map(v => v.id));
-            logger.info(`[VoiceLibraryManager] Loaded ${this.voices.length} voices`);
+            const standardPath = path.join(__dirname, '../data/voices.json');
+            const extendedPath = path.join(__dirname, '../data/voices-flow-01-ex.json');
+            const standardData = JSON.parse(fs.readFileSync(standardPath, 'utf8'));
+            const extendedData = JSON.parse(fs.readFileSync(extendedPath, 'utf8'));
+            this.standardLanguageMap = standardData.languageMap || {};
+            this.extendedLanguageMap = extendedData.languageMap || {};
+            this.standardVoices = (standardData.voices || []).map(voice => ({
+                ...voice,
+                model: voice.model || TURBO_MODEL,
+                // Turbo 的 101 个音色同时可在 Ex 模型下使用。静态数据仍单独维护，
+                // 这里只在读取时声明模型兼容性，避免复制数据。
+                models: [TURBO_MODEL, EX_MODEL],
+                provider: voice.provider || 'tencent'
+            }));
+            this.extendedVoices = (extendedData.voices || []).map(voice => ({
+                ...voice,
+                model: EX_MODEL,
+                models: [EX_MODEL],
+                provider: voice.provider || 'minimax'
+            }));
+            this.standardVoiceIds = new Set(this.standardVoices.map(v => v.id));
+            this.extendedVoiceIds = new Set(this.extendedVoices.map(v => v.id));
+            logger.info(`[VoiceLibraryManager] Loaded ${this.standardVoices.length} standard + ${this.extendedVoices.length} extended voices`);
         } catch (error) {
-            logger.error('[VoiceLibraryManager] Failed to load voices.json:', error.message);
+            logger.error('[VoiceLibraryManager] Failed to load voice libraries:', error.message);
         }
         this.initialized = true;
     }
 
     async getStandardVoices() {
         this.init();
-        return { preset: [...this.voices], cloned: [] };
+        return {
+            preset: [...this.standardVoices],
+            cloned: [],
+            languageMap: { ...this.standardLanguageMap },
+            languageMaps: { flow_02_turbo: { ...this.standardLanguageMap } }
+        };
     }
 
     async getAllVoices() {
-        return this.getStandardVoices();
+        this.init();
+        const exLanguageMap = this.mergeLanguageMaps(
+            this.standardLanguageMap,
+            this.extendedLanguageMap
+        );
+        return {
+            preset: [...this.standardVoices, ...this.extendedVoices],
+            cloned: [],
+            languageMap: exLanguageMap,
+            languageMaps: {
+                flow_02_turbo: { ...this.standardLanguageMap },
+                // Ex 展示自身 327 个音色和 Turbo 共享的 101 个音色，共 428 个。
+                flow_01_ex: exLanguageMap
+            }
+        };
+    }
+
+    mergeLanguageMaps(...maps) {
+        const merged = {};
+        for (const map of maps) {
+            for (const [code, item] of Object.entries(map || {})) {
+                merged[code] = {
+                    name: merged[code]?.name || item.name,
+                    count: (merged[code]?.count || 0) + (Number(item.count) || 0)
+                };
+            }
+        }
+        return merged;
     }
 
     /**
      * 获取音色对应的 TTS 模型
-     * 预设音色不传 Model（腾讯云自动选择），克隆音色从数据库查询
+     * 系统音色根据静态映射返回模型，克隆音色从数据库查询。
      */
-    async getModelForVoice(voiceId) {
+    async getModelForVoice(voiceId, requestedModel = '') {
         this.init();
 
-        if (this.voiceIds.has(voiceId)) return '';
+        if (this.extendedVoiceIds.has(voiceId)) return EX_MODEL;
+        if (this.standardVoiceIds.has(voiceId)) {
+            return requestedModel === EX_MODEL ? EX_MODEL : TURBO_MODEL;
+        }
 
         // 检查缓存
         const now = Date.now();
@@ -95,5 +154,9 @@ class VoiceLibraryManager {
 }
 
 const voiceLibraryManager = new VoiceLibraryManager();
-setInterval(() => voiceLibraryManager.cleanupCache(), 10 * 60 * 1000);
+const cacheCleanupTimer = setInterval(
+    () => voiceLibraryManager.cleanupCache(),
+    10 * 60 * 1000
+);
+cacheCleanupTimer.unref?.();
 module.exports = voiceLibraryManager;

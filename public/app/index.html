@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TTS Studio</title>
+  <link rel="stylesheet" href="assets/tts-studio.css">
+  <script src="assets/i18n.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-auth-inject.js"></script>
+  <script src="quota-interceptor.js"></script>
+</head>
+<body data-page="home">
+  <script src="assets/tts-shell.js"></script>
+  <main class="app-main">
+    <div class="page-shell">
+      <header class="home-hero">
+        <h1>TTS Studio</h1>
+        <p>Text-to-Speech · Streaming · Voice Cloning</p>
+      </header>
+
+      <section class="console">
+        <div class="console-tabs">
+          <button class="ctab active" data-mode="tts" type="button">文本转语音</button>
+          <button class="ctab" data-mode="streaming" type="button">流式合成</button>
+        </div>
+        <div class="console-body">
+          <div class="use-cases">
+            <span class="muted">示例</span>
+            <button class="use-chip active" type="button" data-example data-scene="education">课堂教育</button>
+            <button class="use-chip" type="button" data-example data-scene="customer-service">客服场景</button>
+            <button class="use-chip" type="button" data-example data-scene="game">游戏</button>
+            <button class="use-chip" type="button" data-example data-scene="audiobook">有声书</button>
+          </div>
+
+          <div class="inline-head">
+            <div class="model-seg studio-model-seg" id="studio-model">
+              <button class="seg-item mono on" type="button" data-model="flow_02_turbo">flow_02_turbo<span class="new-badge">New</span></button>
+              <button class="seg-item mono" type="button" data-model="flow_01_ex">flow_01_ex</button>
+            </div>
+            <div class="field studio-language-field"><label for="studio-language">语言</label><select class="select" id="studio-language"></select></div>
+          </div>
+
+          <div class="textarea-wrap">
+            <textarea id="studio-text" maxlength="1000">同学们好，欢迎来到今天的物理课堂。今天我们要学习的内容是"牛顿第三定律"——也就是作用力与反作用力的关系。在我们日常生活中，这个定律无处不在。比如，当你站在地面上，你的脚向下压地面，地面同时给你一个向上的支撑力，这两个力大小相等、方向相反。再比如，火箭发射时，向下喷射的高温气体给火箭一个强大的向上推力。大家注意，作用力和反作用力一定作用在两个不同的物体上，而且它们是同时产生、同时消失的。接下来，请翻开课本第四十二页，我们一起来看几道经典例题，巩固一下今天的知识。</textarea>
+            <div class="text-toolbar"><span>情绪与停顿由模型自动处理</span><span><span class="mono" id="studio-char-count">0 / 1000</span> · <button class="link-btn" id="studio-clear" type="button">清空</button></span></div>
+          </div>
+
+          <div class="voice-tools">
+            <div><div class="section-title">音色选择</div><div class="muted" id="studio-model-summary"></div></div>
+            <input class="search" id="studio-voice-search" placeholder="搜索音色 / Voice ID">
+          </div>
+          <div class="chips" id="studio-voice-cats"><button class="chip on" data-category="all" type="button">全部</button></div>
+          <div class="voice-carousel" id="studio-voice-list"></div>
+
+          <div class="field-grid two">
+            <div class="field"><label for="studio-custom-voice">自定义 Voice ID（可选）</label><input class="input mono studio-config-control" id="studio-custom-voice" placeholder="覆盖上方已选音色"></div>
+            <div class="field" id="studio-emotion-field"><label for="studio-emotion">情感风格</label><select class="select studio-config-control" id="studio-emotion"></select><span class="field-hint hidden" id="studio-emotion-hint">仅 flow_01_ex 支持情感风格</span></div>
+          </div>
+
+          <div class="sliders">
+            <div class="sliders-head"><span>声音参数</span><button class="link-btn" id="studio-params-reset" type="button">重置</button></div>
+            <label class="slider-field"><span class="slider-head"><b>语速</b><output id="studio-speed-value">1.0</output></span><input type="range" id="studio-speed" min="0.5" max="2" step="0.1" value="1"><span class="muted">0.5–2.0</span></label>
+            <label class="slider-field"><span class="slider-head"><b>音量</b><output id="studio-volume-value">1.0</output></span><input type="range" id="studio-volume" min="0" max="10" step="0.1" value="1"><span class="muted">0–10</span></label>
+            <label class="slider-field"><span class="slider-head"><b>音高</b><output id="studio-pitch-value">0</output></span><input type="range" id="studio-pitch" min="-12" max="12" step="1" value="0"><span class="muted">-12–12</span></label>
+          </div>
+
+          <!-- 高级设置暂时停用，保留代码供后续恢复
+          <details class="advanced" id="studio-advanced">
+            <summary><span>高级设置（格式 / 采样率 / 比特率）</span><span>⌄</span></summary>
+            <div class="advanced-body">
+              <div class="field-grid">
+                <div class="field"><label>音频格式 <span class="api-tag">Format</span></label><div class="format-seg" id="studio-format"><button class="seg-item mono on" data-format="mp3" type="button">mp3</button><button class="seg-item mono" data-format="wav" type="button" disabled aria-disabled="true">wav</button><button class="seg-item mono" data-format="opus" type="button" disabled aria-disabled="true">opus</button><button class="seg-item mono" data-format="pcm" type="button" disabled aria-disabled="true">pcm</button></div></div>
+                <div class="field"><label for="studio-sample-rate">采样率 <span class="api-tag">SampleRate</span></label><input class="select mono advanced-select" id="studio-sample-rate" type="text" value="24000 Hz" data-value="24000" readonly aria-readonly="true"></div>
+                <div class="field" id="studio-bitrate-field"><label for="studio-bitrate">比特率 <span class="api-tag">Bitrate</span></label><input class="select mono advanced-select" id="studio-bitrate" type="text" value="64 kbps" data-value="64" readonly aria-readonly="true"><span class="field-hint">仅 MP3 生效</span></div>
+              </div>
+            </div>
+          </details>
+          -->
+
+          <div class="gen-meta"><span id="studio-cost">本次合成将消耗 100 点配额</span><span>⌘ / Ctrl + Enter 快速合成</span></div>
+          <div class="action-row"><button class="primary-button" id="studio-submit" type="button"><span id="studio-submit-label">合成语音</span></button><button class="secondary-button" id="studio-reset" type="button">重置全部</button></div>
+          <div class="loading" id="studio-loading"><span class="spinner"></span><span>正在请求语音服务...</span></div>
+          <div class="message" id="studio-message"></div>
+
+          <div class="divider"></div>
+          <div class="section-head"><span class="section-title">合成结果 <span class="status-pill" id="studio-result-status">待合成</span></span><button class="secondary-button" id="studio-download" type="button" disabled>下载音频</button></div>
+          <div class="stream-panel hidden" id="stream-status">
+            <div class="stream-row"><span>Connection</span><b class="good" id="stream-connection">未连接</b></div>
+            <div class="stream-row"><span>Chunks received</span><b id="stream-chunks">0</b></div>
+            <div class="stream-row"><span>Time to first chunk</span><b id="stream-first">-</b></div>
+            <div class="stream-row"><span>Total size</span><b id="stream-size">0 KB</b></div>
+          </div>
+          <div class="empty-result" id="result-empty">完成一次合成后，可在这里播放和下载真实音频。</div>
+          <div class="result-card audio-player" id="studio-player"><audio id="studio-audio" controls></audio><div class="metrics"><div class="metric"><b id="metric-first">-</b><span>首包时间</span></div><div class="metric"><b id="metric-time">-</b><span>处理耗时</span></div><div class="metric"><b id="metric-size">-</b><span>文件大小</span></div><div class="metric"><b id="metric-chars">-</b><span>文本字符</span></div></div></div>
+        </div>
+      </section>
+    </div>
+  </main>
+  <script src="assets/tts-studio.js"></script>
+</body>
+</html>

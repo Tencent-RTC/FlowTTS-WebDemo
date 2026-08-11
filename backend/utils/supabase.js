@@ -9,22 +9,33 @@ const logger = require('./logger');
 
 // Initialize Supabase clients
 const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabasePublishableKey = process.env.SUPABASE_PUBLISHABLE_KEY;
+const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY;
+const missingSupabaseConfig = new Proxy({}, {
+    get(_target, property) {
+        // Do not make the fallback look like a Promise to await/inspection code.
+        if (property === 'then') return undefined;
+        throw new Error('Supabase server configuration is missing');
+    }
+});
 
-if (!supabaseUrl || !supabaseAnonKey) {
-    logger.warn('[Supabase] Missing SUPABASE_URL or SUPABASE_ANON_KEY in .env');
+if (!supabaseUrl || !supabasePublishableKey) {
+    logger.warn('[Supabase] Missing SUPABASE_URL or SUPABASE_PUBLISHABLE_KEY in .env');
 }
 
-if (!supabaseUrl || !supabaseServiceKey) {
-    logger.warn('[Supabase] Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in .env');
+if (!supabaseUrl || !supabaseSecretKey) {
+    logger.warn('[Supabase] Missing SUPABASE_URL or SUPABASE_SECRET_KEY in .env');
 }
 
-// Client for JWT verification (using ANON_KEY)
-const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey);
+// Client for JWT verification (using the public browser key)
+const supabaseAuth = supabaseUrl && supabasePublishableKey
+    ? createClient(supabaseUrl, supabasePublishableKey)
+    : missingSupabaseConfig;
 
-// Client for database operations (using SERVICE_ROLE_KEY)
-const supabaseDb = createClient(supabaseUrl, supabaseServiceKey);
+// Client for privileged database/storage operations (server-only secret key)
+const supabaseDb = supabaseUrl && supabaseSecretKey
+    ? createClient(supabaseUrl, supabaseSecretKey)
+    : missingSupabaseConfig;
 
 /**
  * Validate UUID format
@@ -98,9 +109,16 @@ async function verifyJWT(authHeader) {
             throw new Error('User not found');
         }
 
+        const provider = user.app_metadata?.provider || user.identities?.[0]?.provider || '';
+        if (provider !== 'email') {
+            throw new Error('Only email accounts are supported');
+        }
+
         return {
             id: user.id,
-            email: user.email
+            email: user.email,
+            company: user.user_metadata?.company || '',
+            provider
         };
     } catch (error) {
         throw new Error(`JWT verification error: ${error.message}`);
@@ -130,7 +148,7 @@ async function getUserProfile(userId) {
                 .insert({
                     user_id: userId,
                     subscription_tier: 'free',
-                    daily_quota: 100,
+                    daily_quota: 10000,
                     used_quota: 0,
                     last_reset_date: new Date().toISOString().split('T')[0],
                     subscription_start: null,
@@ -150,28 +168,23 @@ async function getUserProfile(userId) {
         throw new Error(`Failed to fetch user profile: ${error.message}`);
     }
 
-    // Check if quota should reset (daily reset)
-    const today = new Date().toISOString().split('T')[0];
-    if (data.last_reset_date !== today) {
-        // Reset quota
-        const { data: resetData, error: resetError } = await supabaseDb
-            .from('user_profile')
-            .update({
-                used_quota: 0,
-                last_reset_date: today
-            })
-            .eq('user_id', userId)
-            .select()
-            .single();
+    return data;
+}
 
-        if (resetError) {
-            throw new Error(`Failed to reset quota: ${resetError.message}`);
-        }
-
-        logger.info({ userId, oldDate: data.last_reset_date, newDate: today }, 'Quota reset for user');
-        return resetData;
-    }
-
+async function updateUserCompany(userId, email, company) {
+    validateUserId(userId);
+    const normalizedCompany = typeof company === 'string' ? company.trim().slice(0, 100) : '';
+    const profile = await getUserProfile(userId);
+    const { data, error } = await supabaseDb
+        .from('user_profile')
+        .update({
+            email: email || profile.email || null,
+            company: normalizedCompany || null
+        })
+        .eq('user_id', userId)
+        .select()
+        .single();
+    if (error) throw new Error(`Failed to update company: ${error.message}`);
     return data;
 }
 
@@ -194,7 +207,7 @@ async function updateQuota(userId, amount) {
 
     // Ensure it doesn't exceed daily_quota
     if (newUsedQuota > profile.daily_quota) {
-        throw new Error(`Quota exceeded: ${newUsedQuota}/${profile.daily_quota}`);
+        throw new Error(`Credits exceeded: ${newUsedQuota}/${profile.daily_quota}`);
     }
 
     // Update used_quota
@@ -231,7 +244,7 @@ async function updateQuota(userId, amount) {
  */
 function getQuotaByTier(tier) {
     const quotas = {
-        free: 100,
+        free: 10000,
         pro: 300,
         max: 1000
     };
@@ -306,6 +319,7 @@ module.exports = {
     supabaseDb,
     verifyJWT,
     getUserProfile,
+    updateUserCompany,
     updateQuota,
     checkQuota,
     getQuotaByTier,

@@ -141,3 +141,10 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+reference
+
+# Local Vercel project metadata
+.vercel/
+
+.DS_Store
