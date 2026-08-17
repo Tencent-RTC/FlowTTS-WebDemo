@@ -2,7 +2,7 @@
   "languageMap": {
     "zh": {
       "name": "中文",
-      "count": 36
+      "count": 32
     },
     "en": {
       "name": "英语",
@@ -202,62 +202,6 @@
         "zh",
         "ja"
       ],
-      "languageName": "中文"
-    },
-    {
-      "id": "v-male-D1a3XyN1",
-      "name": "深情男说书",
-      "nameEn": "Shenqing – Emotional Male Narrator",
-      "language": "zh",
-      "description": "情感饱满，叙事沉浸，适合长篇小说与剧情说书场景。",
-      "sampleText": "雨夜里，他把那本旧书轻轻合上，终于决定把埋藏多年的秘密说出来。",
-      "previewUrl": "",
-      "gender": "Male",
-      "tone": "Emotional, Deep",
-      "style": "Narration, Storytelling",
-      "scenarios": "说书，有声书",
-      "languageName": "中文"
-    },
-    {
-      "id": "v-male-R2a7LdY3",
-      "name": "自然男说书",
-      "nameEn": "Ziran – Natural Male Narrator",
-      "language": "zh",
-      "description": "自然亲和，语感流畅，适合日常叙述与轻剧情说书。",
-      "sampleText": "清晨第一缕阳光照进院子的时候，故事就从那封未寄出的信开始了。",
-      "previewUrl": "",
-      "gender": "Male",
-      "tone": "Natural, Warm",
-      "style": "Narration, Conversational",
-      "scenarios": "说书，有声书",
-      "languageName": "中文"
-    },
-    {
-      "id": "v-female-W5f2TyL3",
-      "name": "温柔女说书",
-      "nameEn": "Wenrou – Gentle Female Narrator",
-      "language": "zh",
-      "description": "温柔细腻，节奏舒缓，适合治愈向故事与儿童睡前内容。",
-      "sampleText": "她的声音像晚风一样轻柔，把每一个平凡的日子都讲成了温暖的故事。",
-      "previewUrl": "",
-      "gender": "Female",
-      "tone": "Gentle, Soothing",
-      "style": "Narration, Bedtime Story",
-      "scenarios": "说书，有声书",
-      "languageName": "中文"
-    },
-    {
-      "id": "v-female-B2p8XcY2",
-      "name": "傲娇女说书",
-      "nameEn": "Aojiao – Sassy Female Narrator",
-      "language": "zh",
-      "description": "俏皮灵动，角色感强，适合轻喜剧与互动型说书内容。",
-      "sampleText": "哼，我才不是特意来讲给你听的，只是这个故事刚好很有意思而已。",
-      "previewUrl": "",
-      "gender": "Female",
-      "tone": "Playful, Sassy",
-      "style": "Narration, Character Voice",
-      "scenarios": "说书，有声书",
       "languageName": "中文"
     },
     {
